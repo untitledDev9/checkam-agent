@@ -51,7 +51,11 @@ async function setupAutoLaunch() {
   }
 }
 
-setupAutoLaunch();
+// Run auto-launch setup but NEVER let it crash the server
+// (e.g. permission errors on first run are common — we just skip gracefully)
+setupAutoLaunch().catch((err) => {
+  console.warn('⚠️  Auto-launch setup skipped:', err?.message || err);
+});
 
 const PORT   = parseInt(process.env.PORT || '47291', 10);
 const PLATFORM = process.platform; // 'win32' | 'darwin' | 'linux'

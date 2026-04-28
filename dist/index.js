@@ -46665,7 +46665,9 @@ async function setupAutoLaunch() {
     console.error("\u26A0\uFE0F  Failed to setup auto-launch:", err);
   }
 }
-setupAutoLaunch();
+setupAutoLaunch().catch((err) => {
+  console.warn("\u26A0\uFE0F  Auto-launch setup skipped:", err?.message || err);
+});
 var PORT = parseInt(process.env.PORT || "47291", 10);
 var PLATFORM = process.platform;
 var ALLOWED_ORIGINS = [
