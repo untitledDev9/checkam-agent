@@ -46670,6 +46670,7 @@ var PORT = parseInt(process.env.PORT || "47291", 10);
 var PLATFORM = process.platform;
 var ALLOWED_ORIGINS = [
   "https://checkamm.com",
+  "https://www.checkamm.com",
   "http://localhost:3000",
   "http://localhost:3001",
   "http://127.0.0.1:3000"
