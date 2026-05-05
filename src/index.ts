@@ -85,10 +85,17 @@ app.use(cors({
 
 app.use(express.json());
 
-// ── Battery reader ────────────────────────────────────────────────────────────
+// ── Battery reader (cached for 5 minutes) ────────────────────────────────────
+let batteryCache: { data: BatteryData; expires: number } | null = null;
+
 async function readBattery(): Promise<BatteryData> {
-  if (PLATFORM === 'win32')  return getWindowsBattery();
-  if (PLATFORM === 'darwin') return getMacBattery();
+  const now = Date.now();
+  if (batteryCache && now < batteryCache.expires) {
+    console.log('🔋 Returning cached battery data');
+    return batteryCache.data;
+  }
+  if (PLATFORM === 'win32')  { const d = await getWindowsBattery(); batteryCache = { data: d, expires: now + 5 * 60 * 1000 }; return d; }
+  if (PLATFORM === 'darwin') { const d = await getMacBattery();     batteryCache = { data: d, expires: now + 5 * 60 * 1000 }; return d; }
   throw new Error(`Unsupported platform: ${PLATFORM}. CheckAm Agent supports Windows and macOS.`);
 }
 

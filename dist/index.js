@@ -46689,9 +46689,23 @@ app.use((0, import_cors.default)({
   allowedHeaders: ["Content-Type"]
 }));
 app.use(import_express.default.json());
+var batteryCache = null;
 async function readBattery() {
-  if (PLATFORM === "win32") return getWindowsBattery();
-  if (PLATFORM === "darwin") return getMacBattery();
+  const now = Date.now();
+  if (batteryCache && now < batteryCache.expires) {
+    console.log("\u{1F50B} Returning cached battery data");
+    return batteryCache.data;
+  }
+  if (PLATFORM === "win32") {
+    const d = await getWindowsBattery();
+    batteryCache = { data: d, expires: now + 5 * 60 * 1e3 };
+    return d;
+  }
+  if (PLATFORM === "darwin") {
+    const d = await getMacBattery();
+    batteryCache = { data: d, expires: now + 5 * 60 * 1e3 };
+    return d;
+  }
   throw new Error(`Unsupported platform: ${PLATFORM}. CheckAm Agent supports Windows and macOS.`);
 }
 app.get("/ping", (_req, res) => {
