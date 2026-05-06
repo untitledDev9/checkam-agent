@@ -23,6 +23,9 @@ import { getWindowsBattery } from './battery/windows';
 import { getMacBattery }     from './battery/mac';
 import { submitBatterySession, AGENT_VERSION } from './submit';
 import type { BatteryData } from './battery/types';
+import { getWindowsStorage } from './storage/windows';
+import { getMacStorage }     from './storage/mac';
+import type { StorageData }  from './storage/types';
 import AutoLaunch from 'auto-launch';
 
 const app = express();
@@ -84,6 +87,20 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// ── Storage reader (cached for 10 minutes) ───────────────────────────────────
+let storageCache: { data: StorageData; expires: number } | null = null;
+
+async function readStorage(): Promise<StorageData> {
+  const now = Date.now();
+  if (storageCache && now < storageCache.expires) {
+    console.log('💾 Returning cached storage data');
+    return storageCache.data;
+  }
+  if (PLATFORM === 'win32')  { const d = await getWindowsStorage(); storageCache = { data: d, expires: now + 10 * 60 * 1000 }; return d; }
+  if (PLATFORM === 'darwin') { const d = await getMacStorage();     storageCache = { data: d, expires: now + 10 * 60 * 1000 }; return d; }
+  throw new Error(`Unsupported platform: ${PLATFORM}.`);
+}
 
 // ── Battery reader (cached for 5 minutes) ────────────────────────────────────
 let batteryCache: { data: BatteryData; expires: number } | null = null;
@@ -148,6 +165,22 @@ app.get('/battery', async (req: Request, res: Response) => {
       unit:                data.unit,
     },
   });
+});
+
+/** GET /storage — read disk health data */
+app.get('/storage', async (_req: Request, res: Response) => {
+  let data: StorageData;
+  try {
+    console.log('💾 Reading storage data...');
+    data = await readStorage();
+    console.log(`✅ ${data.disks.length} disk(s) found`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error reading storage';
+    console.error('❌ Storage read failed:', message);
+    res.status(500).json({ success: false, error: message });
+    return;
+  }
+  res.json({ success: true, data });
 });
 
 // ── Error handler ─────────────────────────────────────────────────────────────

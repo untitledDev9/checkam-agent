@@ -46643,6 +46643,141 @@ async function submitBatterySession(sessionId, data2, imei) {
   });
 }
 
+// src/storage/windows.ts
+var import_child_process3 = require("child_process");
+function encodeCommand(script) {
+  return Buffer.from(script, "utf16le").toString("base64");
+}
+function normalizeHealth(h) {
+  const s = (h || "").toLowerCase();
+  if (s === "healthy") return "Healthy";
+  if (s === "warning") return "Warning";
+  if (s === "unhealthy") return "Unhealthy";
+  return "Unknown";
+}
+function normalizeMediaType(m) {
+  const s = (m || "").toLowerCase();
+  if (s === "nvme" || s === "scm") return "NVMe";
+  if (s === "ssd") return "SSD";
+  if (s === "hdd") return "HDD";
+  return "Unknown";
+}
+async function getWindowsStorage() {
+  const script = `
+$out = @()
+try {
+  $disks = Get-PhysicalDisk
+  foreach ($disk in $disks) {
+    $rel = $null
+    try { $rel = $disk | Get-StorageReliabilityCounter -ErrorAction Stop } catch {}
+    $out += [PSCustomObject]@{
+      Model       = $disk.FriendlyName
+      Health      = "$($disk.HealthStatus)"
+      SizeGB      = [math]::Round($disk.Size / 1GB, 1)
+      MediaType   = "$($disk.MediaType)"
+      Temperature = if ($rel -and $rel.Temperature -gt 0) { [int]$rel.Temperature } else { $null }
+      Wear        = if ($rel -and $rel.Wear -gt 0) { [int]$rel.Wear } else { $null }
+    }
+  }
+} catch {
+  throw "Get-PhysicalDisk failed: $_"
+}
+if ($out.Count -eq 1) { $out[0] | ConvertTo-Json -Compress } else { $out | ConvertTo-Json -Compress }
+`.trim();
+  const encoded = encodeCommand(script);
+  let raw;
+  try {
+    raw = (0, import_child_process3.execSync)(
+      `powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], windowsHide: true, timeout: 3e4 }
+    ).trim();
+  } catch (err) {
+    throw new Error(`Storage read failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  let parsed;
+  try {
+    const json = JSON.parse(raw);
+    parsed = Array.isArray(json) ? json : [json];
+  } catch {
+    throw new Error("Failed to parse storage data from PowerShell output.");
+  }
+  const disks = parsed.map((d) => ({
+    model: d.Model || "Unknown Drive",
+    healthStatus: normalizeHealth(d.Health),
+    mediaType: normalizeMediaType(d.MediaType),
+    sizeGB: d.SizeGB ?? 0,
+    temperature: d.Temperature ?? null,
+    wearLevel: d.Wear ?? null
+  }));
+  return { platform: "windows", disks };
+}
+
+// src/storage/mac.ts
+var import_child_process4 = require("child_process");
+function parseSize(sizeStr) {
+  if (!sizeStr) return 0;
+  const match = sizeStr.match(/([\d.,]+)\s*(GB|TB|MB)/i);
+  if (!match) return 0;
+  const val2 = parseFloat(match[1].replace(/,/g, ""));
+  const unit = match[2].toUpperCase();
+  if (unit === "TB") return Math.round(val2 * 1024);
+  if (unit === "MB") return Math.round(val2 / 1024);
+  return Math.round(val2);
+}
+function parseSmartStatus(s) {
+  const lower = (s || "").toLowerCase();
+  if (lower === "verified" || lower === "passed") return "Healthy";
+  if (lower === "failing" || lower === "failed") return "Unhealthy";
+  return "Unknown";
+}
+async function getMacStorage() {
+  const disks = [];
+  try {
+    const raw = (0, import_child_process4.execSync)("system_profiler SPNVMeDataType -json", {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15e3
+    });
+    const data2 = JSON.parse(raw);
+    for (const controller of data2.SPNVMeDataType || []) {
+      for (const item of controller._items || []) {
+        disks.push({
+          model: item._name || "NVMe Drive",
+          healthStatus: parseSmartStatus(item.smart_status),
+          mediaType: "NVMe",
+          sizeGB: parseSize(item.size),
+          temperature: null,
+          wearLevel: null
+        });
+      }
+    }
+  } catch {
+  }
+  try {
+    const raw = (0, import_child_process4.execSync)("system_profiler SPSerialATADataType -json", {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 15e3
+    });
+    const data2 = JSON.parse(raw);
+    for (const controller of data2.SPSerialATADataType || []) {
+      for (const item of controller._items || []) {
+        const isSSD = (item.spsata_medium_type || "").toLowerCase().includes("solid");
+        disks.push({
+          model: item._name || "Drive",
+          healthStatus: parseSmartStatus(item.smart_status),
+          mediaType: isSSD ? "SSD" : "HDD",
+          sizeGB: parseSize(item.size),
+          temperature: item.spsata_temperature ? parseInt(item.spsata_temperature) : null,
+          wearLevel: null
+        });
+      }
+    }
+  } catch {
+  }
+  return { platform: "mac", disks };
+}
+
 // src/index.ts
 var import_auto_launch = __toESM(require_dist());
 var app = (0, import_express.default)();
@@ -46689,6 +46824,25 @@ app.use((0, import_cors.default)({
   allowedHeaders: ["Content-Type"]
 }));
 app.use(import_express.default.json());
+var storageCache = null;
+async function readStorage() {
+  const now = Date.now();
+  if (storageCache && now < storageCache.expires) {
+    console.log("\u{1F4BE} Returning cached storage data");
+    return storageCache.data;
+  }
+  if (PLATFORM === "win32") {
+    const d = await getWindowsStorage();
+    storageCache = { data: d, expires: now + 10 * 60 * 1e3 };
+    return d;
+  }
+  if (PLATFORM === "darwin") {
+    const d = await getMacStorage();
+    storageCache = { data: d, expires: now + 10 * 60 * 1e3 };
+    return d;
+  }
+  throw new Error(`Unsupported platform: ${PLATFORM}.`);
+}
 var batteryCache = null;
 async function readBattery() {
   const now = Date.now();
@@ -46746,6 +46900,20 @@ app.get("/battery", async (req, res) => {
       unit: data2.unit
     }
   });
+});
+app.get("/storage", async (_req, res) => {
+  let data2;
+  try {
+    console.log("\u{1F4BE} Reading storage data...");
+    data2 = await readStorage();
+    console.log(`\u2705 ${data2.disks.length} disk(s) found`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error reading storage";
+    console.error("\u274C Storage read failed:", message);
+    res.status(500).json({ success: false, error: message });
+    return;
+  }
+  res.json({ success: true, data: data2 });
 });
 app.use((err, _req, res, _next) => {
   res.status(500).json({ success: false, error: err.message });
