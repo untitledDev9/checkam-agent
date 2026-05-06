@@ -15,10 +15,10 @@ execSync('npx esbuild src/index.ts --bundle --platform=node --target=node18 --ou
 console.log('📦 Building Windows (silent mode — no terminal)...');
 try {
   execSync(
-    'npx pkg dist/index.js --no-bytecode --public --no-console --output build/index.exe --targets node18-win-x64',
+    'npx pkg dist/index.js --no-bytecode --public --no-console --output build/checkam-agent.exe --targets node18-win-x64',
     { stdio: 'inherit' }
   );
-  console.log('  ✅ Windows → build/index.exe (fully silent, no terminal)');
+  console.log('  ✅ Windows → build/checkam-agent.exe (fully silent, no terminal)');
 } catch {
   console.error('  ❌ Windows build failed.');
 }
