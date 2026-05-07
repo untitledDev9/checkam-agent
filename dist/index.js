@@ -24604,8 +24604,8 @@ var require_application = __commonJS({
       tryRender(view, renderOptions, done);
     };
     app2.listen = function listen() {
-      var server = http2.createServer(this);
-      return server.listen.apply(server, arguments);
+      var server2 = http2.createServer(this);
+      return server2.listen.apply(server2, arguments);
     };
     function logerror(err) {
       if (this.get("env") !== "test") console.error(err.stack || err.toString());
@@ -46918,7 +46918,7 @@ app.get("/storage", async (_req, res) => {
 app.use((err, _req, res, _next) => {
   res.status(500).json({ success: false, error: err.message });
 });
-app.listen(PORT, "127.0.0.1", () => {
+var server = app.listen(PORT, "127.0.0.1", () => {
   const platformLabel = PLATFORM === "win32" ? "Windows" : PLATFORM === "darwin" ? "macOS" : PLATFORM;
   console.log("");
   console.log("  \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510");
@@ -46927,6 +46927,12 @@ app.listen(PORT, "127.0.0.1", () => {
   console.log("  \u2502  Ready for checkamm.com requests        \u2502");
   console.log("  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518");
   console.log("");
+});
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    process.exit(0);
+  }
+  throw err;
 });
 var index_default = app;
 /*! Bundled license information:

@@ -189,7 +189,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, '127.0.0.1', () => {
   const platformLabel = PLATFORM === 'win32' ? 'Windows' : PLATFORM === 'darwin' ? 'macOS' : PLATFORM;
   console.log('');
   console.log('  ┌─────────────────────────────────────────┐');
@@ -198,6 +198,16 @@ app.listen(PORT, '127.0.0.1', () => {
   console.log('  │  Ready for checkamm.com requests        │');
   console.log('  └─────────────────────────────────────────┘');
   console.log('');
+});
+
+// If another instance is already running, exit cleanly (code 0).
+// Exit code 0 = "success" — Windows Task Scheduler will NOT retry it,
+// which stops the repeated launch loop on startup.
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    process.exit(0);
+  }
+  throw err;
 });
 
 export default app;
