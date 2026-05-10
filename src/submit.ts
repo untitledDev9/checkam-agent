@@ -9,7 +9,7 @@ import type { BatteryData } from './battery/types';
 const API_BASE = process.env.API_URL ||
   'https://gadgetvault-backend-2-production.up.railway.app/api/v1';
 
-export const AGENT_VERSION = '1.0.0';
+export const AGENT_VERSION = '1.1.0';
 
 export async function submitBatterySession(
   sessionId: string,

@@ -34,31 +34,32 @@ const app = express();
  * Configure Auto-Launch (run on startup)
  * This works for the packaged .exe / .app
  */
-async function setupAutoLaunch() {
+/**
+ * Auto-Launch Cleanup
+ * Ensures that any old auto-start entries are removed.
+ */
+async function cleanupAutoLaunch() {
   if (process.env.NODE_ENV === 'development') return;
 
   const agentLauncher = new AutoLaunch({
     name: 'CheckAm Agent',
-    path: process.execPath, // Path to the packaged executable
-    isHidden: true,         // Try to start minimized/hidden
+    path: process.execPath,
   });
 
   try {
     const isEnabled = await agentLauncher.isEnabled();
-    if (!isEnabled) {
-      await agentLauncher.enable();
-      console.log('🚀 Auto-launch enabled: CheckAm Agent will start on login');
+    if (isEnabled) {
+      await agentLauncher.disable();
+      console.log('🧹 Auto-launch disabled: CheckAm Agent will no longer start on login');
     }
   } catch (err) {
-    console.error('⚠️  Failed to setup auto-launch:', err);
+    // Gracefully ignore errors
   }
 }
 
-// Run auto-launch setup but NEVER let it crash the server
-// (e.g. permission errors on first run are common — we just skip gracefully)
-setupAutoLaunch().catch((err) => {
-  console.warn('⚠️  Auto-launch setup skipped:', err?.message || err);
-});
+// Run cleanup on startup to fix "old" users who have auto-start enabled
+cleanupAutoLaunch().catch(() => {});
+
 
 const PORT   = parseInt(process.env.PORT || '47291', 10);
 const PLATFORM = process.platform; // 'win32' | 'darwin' | 'linux'
@@ -182,6 +183,33 @@ app.get('/storage', async (_req: Request, res: Response) => {
   }
   res.json({ success: true, data });
 });
+
+/** GET /shutdown — shut down agent and delete executable */
+app.get('/shutdown', (req: Request, res: Response) => {
+  res.json({ success: true, message: 'Agent is shutting down and removing itself.' });
+  
+  const exePath = process.execPath;
+  const isPackaged = !process.env.NODE_ENV || process.env.NODE_ENV === 'production';
+
+  setTimeout(() => {
+    if (isPackaged) {
+      const { spawn } = require('child_process');
+      if (process.platform === 'win32') {
+        spawn('cmd.exe', ['/c', `timeout /t 2 > nul && del /f /q "${exePath}"`], {
+          detached: true,
+          stdio: 'ignore'
+        }).unref();
+      } else {
+        spawn('sh', ['-c', `sleep 2 && rm -f "${exePath}"`], {
+          detached: true,
+          stdio: 'ignore'
+        }).unref();
+      }
+    }
+    process.exit(0);
+  }, 1000);
+});
+
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

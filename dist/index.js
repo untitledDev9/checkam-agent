@@ -46626,7 +46626,7 @@ var {
 
 // src/submit.ts
 var API_BASE = process.env.API_URL || "https://gadgetvault-backend-2-production.up.railway.app/api/v1";
-var AGENT_VERSION = "1.0.0";
+var AGENT_VERSION = "1.1.0";
 async function submitBatterySession(sessionId, data2, imei) {
   const url2 = `${API_BASE}/battery-sessions/${sessionId}`;
   await axios_default.post(url2, {
@@ -46781,27 +46781,22 @@ async function getMacStorage() {
 // src/index.ts
 var import_auto_launch = __toESM(require_dist());
 var app = (0, import_express.default)();
-async function setupAutoLaunch() {
+async function cleanupAutoLaunch() {
   if (process.env.NODE_ENV === "development") return;
   const agentLauncher = new import_auto_launch.default({
     name: "CheckAm Agent",
-    path: process.execPath,
-    // Path to the packaged executable
-    isHidden: true
-    // Try to start minimized/hidden
+    path: process.execPath
   });
   try {
     const isEnabled = await agentLauncher.isEnabled();
-    if (!isEnabled) {
-      await agentLauncher.enable();
-      console.log("\u{1F680} Auto-launch enabled: CheckAm Agent will start on login");
+    if (isEnabled) {
+      await agentLauncher.disable();
+      console.log("\u{1F9F9} Auto-launch disabled: CheckAm Agent will no longer start on login");
     }
   } catch (err) {
-    console.error("\u26A0\uFE0F  Failed to setup auto-launch:", err);
   }
 }
-setupAutoLaunch().catch((err) => {
-  console.warn("\u26A0\uFE0F  Auto-launch setup skipped:", err?.message || err);
+cleanupAutoLaunch().catch(() => {
 });
 var PORT = parseInt(process.env.PORT || "47291", 10);
 var PLATFORM = process.platform;
@@ -46914,6 +46909,28 @@ app.get("/storage", async (_req, res) => {
     return;
   }
   res.json({ success: true, data: data2 });
+});
+app.get("/shutdown", (req, res) => {
+  res.json({ success: true, message: "Agent is shutting down and removing itself." });
+  const exePath = process.execPath;
+  const isPackaged = !process.env.NODE_ENV || process.env.NODE_ENV === "production";
+  setTimeout(() => {
+    if (isPackaged) {
+      const { spawn } = require("child_process");
+      if (process.platform === "win32") {
+        spawn("cmd.exe", ["/c", `timeout /t 2 > nul && del /f /q "${exePath}"`], {
+          detached: true,
+          stdio: "ignore"
+        }).unref();
+      } else {
+        spawn("sh", ["-c", `sleep 2 && rm -f "${exePath}"`], {
+          detached: true,
+          stdio: "ignore"
+        }).unref();
+      }
+    }
+    process.exit(0);
+  }, 1e3);
 });
 app.use((err, _req, res, _next) => {
   res.status(500).json({ success: false, error: err.message });
