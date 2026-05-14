@@ -46625,7 +46625,7 @@ var {
 } = axios_default;
 
 // src/submit.ts
-var API_BASE = process.env.API_URL || "https://gadgetvault-backend-2-production.up.railway.app/api/v1";
+var API_BASE = process.env.API_URL || "https://gadgetvault-backend.onrender.com/api/v1";
 var AGENT_VERSION = "1.1.0";
 async function submitBatterySession(sessionId, data2, imei) {
   const url2 = `${API_BASE}/battery-sessions/${sessionId}`;

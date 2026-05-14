@@ -7,7 +7,7 @@ import axios from 'axios';
 import type { BatteryData } from './battery/types';
 
 const API_BASE = process.env.API_URL ||
-  'https://gadgetvault-backend-2-production.up.railway.app/api/v1';
+  'https://gadgetvault-backend.onrender.com/api/v1';
 
 export const AGENT_VERSION = '1.1.0';
 

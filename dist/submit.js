@@ -11,7 +11,7 @@ exports.AGENT_VERSION = void 0;
 exports.submitBatterySession = submitBatterySession;
 const axios_1 = __importDefault(require("axios"));
 const API_BASE = process.env.API_URL ||
-    'https://gadgetvault-backend-2-production.up.railway.app/api/v1';
+    'https://gadgetvault-backend.onrender.com/api/v1';
 exports.AGENT_VERSION = '1.0.0';
 async function submitBatterySession(sessionId, data, imei) {
     const url = `${API_BASE}/battery-sessions/${sessionId}`;
